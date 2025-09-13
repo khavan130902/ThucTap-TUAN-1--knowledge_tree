@@ -26,10 +26,10 @@ class _TreePageState extends State<TreePage> {
     );
   }
 
+  // 🔹 Mở phong thư thật, giảm lượt
   void _openMessage(int index) {
     final currentUser = UserData.username!;
 
-    // Kiểm tra reset theo ngày
     final msg = UserData.checkAndResetClicks(currentUser);
     if (msg.isNotEmpty && UserData.getRemainingClicks(currentUser) == 0) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -38,7 +38,6 @@ class _TreePageState extends State<TreePage> {
       return;
     }
 
-    // Hết lượt thì báo
     if (UserData.getRemainingClicks(currentUser) <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Bạn đã hết lượt mở hôm nay!")),
@@ -46,13 +45,12 @@ class _TreePageState extends State<TreePage> {
       return;
     }
 
-    // Nếu còn lượt thì mở
+    final message = messages[random.nextInt(messages.length)];
+
     setState(() {
       openedIndex = index;
-      UserData.useClick(currentUser); // ✅ giảm lượt
+      UserData.useClick(currentUser, message); // giảm lượt và lưu lịch sử
     });
-
-    final message = messages[random.nextInt(messages.length)];
 
     showModalBottomSheet(
       context: context,
@@ -94,17 +92,81 @@ class _TreePageState extends State<TreePage> {
     );
   }
 
+  // 🔹 Xem tất cả 100 phong thư (không trừ lượt)
+  void _previewAllMessages() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+      ),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: SizedBox(
+          height: MediaQuery.of(context).size.height * 0.8,
+          child: ListView.builder(
+            itemCount: totalEnvelopes,
+            itemBuilder: (context, index) {
+              final msg = messages[index % messages.length];
+              return Card(
+                child: ListTile(
+                  leading: const Icon(Icons.mail_outline, color: Colors.blueAccent),
+                  title: Text("Phong thư ${index + 1}"),
+                  subtitle: Text(msg),
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  // 🔹 Xem lịch sử những phong thư đã mở
+  void _viewHistory() {
+    final history = UserData.getHistory(UserData.username!);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+      ),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: SizedBox(
+          height: MediaQuery.of(context).size.height * 0.6,
+          child: ListView.builder(
+            itemCount: history.length,
+            itemBuilder: (context, index) {
+              final entry = history[index];
+              final time = entry['time'] as DateTime;
+              return ListTile(
+                leading: const Icon(Icons.check_circle, color: Colors.green),
+                title: Text(entry['message']),
+                subtitle: Text(
+                    "${time.hour.toString().padLeft(2,'0')}:${time.minute.toString().padLeft(2,'0')}:${time.second.toString().padLeft(2,'0')}"),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
   void _logout() {
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (_) => LoginPage()),
+      MaterialPageRoute(builder: (_) => const LoginPage()),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final currentUser = UserData.username!;
-    final remainingOpens = UserData.getRemainingClicks(currentUser); // ✅ lấy lượt từ UserData
+    final remainingOpens = UserData.getRemainingClicks(currentUser);
 
     return Scaffold(
       extendBodyBehindAppBar: true,
@@ -114,6 +176,36 @@ class _TreePageState extends State<TreePage> {
         title: const Text("🌳 Cây Tri Thức"),
         centerTitle: true,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.history, color: Colors.black87),
+            tooltip: "Lịch sử mở + xem tất cả",
+            onPressed: () {
+              showModalBottomSheet(
+                context: context,
+                backgroundColor: Colors.white,
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+                ),
+                builder: (_) => Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ElevatedButton(
+                        onPressed: _previewAllMessages,
+                        child: const Text("Xem tất cả phong thư"),
+                      ),
+                      const SizedBox(height: 10),
+                      ElevatedButton(
+                        onPressed: _viewHistory,
+                        child: const Text("Xem lịch sử mở"),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
           Padding(
             padding: const EdgeInsets.only(right: 12),
             child: CircleAvatar(
@@ -194,11 +286,9 @@ class _TreePageState extends State<TreePage> {
                   final isOpened = openedIndex == index;
                   final pos = envelopePositions[index];
 
-                  // 🔧 Giới hạn khu vực đặt phong thư
                   final envelopeAreaWidth = treeWidth * 0.7;
                   final envelopeAreaHeight = treeHeight * 0.55;
 
-                  // Dịch chuyển phong thư vào vùng tán cây
                   final left = treeLeft +
                       (treeWidth - envelopeAreaWidth) / 2 +
                       pos.dx * envelopeAreaWidth;
@@ -221,8 +311,7 @@ class _TreePageState extends State<TreePage> {
                           height: 28,
                           color: isOpened
                               ? Colors.amber
-                              : Colors.primaries[
-                          index % Colors.primaries.length]
+                              : Colors.primaries[index % Colors.primaries.length]
                               .shade400,
                         ),
                       ),
